@@ -1,29 +1,28 @@
 import os 
 import torch
 import re
+import numpy as np
 from torch.utils.data import Dataset
 from torchvision import transforms  
 from PIL import Image
-
+from utils import Tensor255
 
 
 class PGMImageDataset(Dataset):
+    
     TRANSFORM = transforms.Compose([
-    transforms.Resize((256, 256)),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.5], std=[0.5])
-])
-
+    Tensor255()
+    ])
+    
     def __init__(self, cover_path, stego_path, stego_algorithm,bpp='0.2bpp', transform=None):
         self.cover_path = cover_path
         self.stego_algorithm = stego_algorithm
         self.stego_path = os.path.join(stego_path, self.stego_algorithm, bpp,'stego')
         self.cover_images = {int(re.findall(r'\d+',f)[0]):f for f in os.listdir(self.cover_path)}
         self.stego_images={int(re.findall(r'\d+',f)[0]):f for f in os.listdir(self.stego_path)}
+        self.transform = transform
         if transform is None:
             self.transform = PGMImageDataset.TRANSFORM
-        
-        
         
     def __len__(self):
         return len(self.cover_images)
@@ -36,6 +35,7 @@ class PGMImageDataset(Dataset):
         if self.transform:
             cover_image = self.transform(cover_image)
             stego_image = self.transform(stego_image)
+            
         return (cover_image,stego_image)
     
     
