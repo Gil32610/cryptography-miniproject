@@ -2,7 +2,7 @@ torch
 torchvision
 pandas
 scikit-learn
+opencv-python
 tensorflow==2.2.0
 protobuf>=3.8.0,<3.20
 numpy<1.24
-

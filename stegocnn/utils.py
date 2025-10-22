@@ -2,8 +2,6 @@ from torchvision import transforms
 import torch
 import numpy as np
 import tensorflow as tf
-import tensorflow as tf
-
 
 class Tensor255:
     def __call__(self, img):
