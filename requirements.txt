@@ -1,5 +1,8 @@
 torch
 torchvision
-numpy
 pandas
 scikit-learn
+tensorflow==2.2.0
+protobuf>=3.8.0,<3.20
+numpy<1.24
+
