@@ -92,6 +92,15 @@ class FeatureExtractionConv(nn.Module):
             affine=True,
             track_running_stats=True
         )
+        
+    def forward(self, x):
+        x = self.depth_wise_conv1(x)
+        x = self.separable_conv1(x)
+        x = self.batch_norm1(x)
+        x = self.depth_wise_conv2(x)
+        x = self.separable_conv2(x)
+        x = self.batch_norm2(x)
+        return x
     
 class SeparableConv(nn.Module):
     def __init__(self, 
