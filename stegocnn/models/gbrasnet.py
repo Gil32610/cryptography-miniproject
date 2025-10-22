@@ -92,6 +92,8 @@ class FeatureExtractionConv(nn.Module):
             affine=True,
             track_running_stats=True
         )
+        self.batch_norm2.weight.requires_grad = False
+        self.batch_norm2.bias.requires_grad = True
         
     def forward(self, x):
         x = self.depth_wise_conv1(x)
@@ -130,6 +132,34 @@ class SeparableConv(nn.Module):
         x = self.pointwise(x)
         x = self.activation(x)
         return x
+
+class DimensionalityReductionConv(nn.Module):
+    
+    def __init__(self,
+                 in_channels,
+                 avg_kernel_size,
+                 avg_stride,
+                 conv_kernel_size,
+                 conv_stride
+                 ):
+        super().__init__()
+        self.average_pooling = nn.AvgPool2d(
+            kernel_size=avg_kernel_size,
+            stride=avg_stride
+            )
+        self.conv = nn.Conv2d(
+            in_channels=in_channels,
+            kernel_size=conv_kernel_size,
+            stride=conv_stride
+            )
+        self.batch_norm = nn.BatchNorm2d(
+            momentum=.8,
+            eps=1e-3,
+            affine=True,
+            track_running_stats=True
+        )
+        self.batch_norm.weight.requires_grad = False
+        self.batch_norm.bias.requires_grad = True
 
         
         
