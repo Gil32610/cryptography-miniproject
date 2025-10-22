@@ -73,7 +73,6 @@ class FeatureExtractionConv(nn.Module):
         self.batch_norm1.weight.requires_grad = False
         self.batch_norm1.bias.requires_grad = True
         
-        
         self.depth_wise_conv2 = nn.Conv2d(
             in_channels=in_channels,
             out_channels=out_channels,
@@ -134,7 +133,6 @@ class SeparableConv(nn.Module):
         return x
 
 class DimensionalityReductionConv(nn.Module):
-    
     def __init__(self,
                  in_channels,
                  avg_kernel_size,
@@ -160,6 +158,55 @@ class DimensionalityReductionConv(nn.Module):
         )
         self.batch_norm.weight.requires_grad = False
         self.batch_norm.bias.requires_grad = True
+    
+    def forward(self, x):
+        x = self.average_pooling(x)
+        x = self.conv(x)
+        x = self.batch_norm(x)
+        return x
 
+class SimpleConv(nn.Module):
+    def __init__(self,
+                 in_channels,
+                 out_channels,
+                 kernel_size,
+                 stride=1,
+                 padding=1,
+                 bias = True
+                 ):
+        super().__init__()
+        self.conv = nn.Conv2d(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            bias=bias
+        )
+        self.activation = nn.ELU()
+        self.batch_norm = nn.BatchNorm2d(
+            momentum=.8,
+            eps=1e-3,
+            affine=True,
+            track_running_stats=True
+        )
+        nn.init.xavier_uniform_(self.conv.weight)
+        if self.conv.bias is not None:
+            nn.init.xavier_uniform_(self.conv.bias)
+            
+    def forward(self,x):
+        x = self.conv(x)
+        x = self.activation(x)
+        x = self.batch_norm(x)
+        return x
+    
+class OutputLayer(nn.Module):
+    def __init__(self, output_size):
+        super().__init__()
+        self.global_avg_pool = nn.AdaptiveAvgPool2d(output_size=output_size)
+        self.output = nn.Softmax(dim=1)
         
-        
+    def forward(self, x):
+        x = self.global_avg_pool(x)
+        x = self.output(x)
+        return x
