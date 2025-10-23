@@ -19,9 +19,10 @@ class WeightExtractor:
     @staticmethod
     def extract_weights_from_keras(model:tf.keras.Model, output_path):
         model_name = model.name
+        print(model_name)
         for i, layer in enumerate(model.layers):
             filename = f'{layer.name}_{i}_weights.npy' 
-            output_path = os.path.join(output_path, model_name, filename)
+            path = os.path.join(output_path, filename)
             weights = layer.get_weights()
-            np.save(file=output_path,arr=weights)
-            print(f'Saved {layer.name}')
+            np.save(path,arr=weights)
+            print(f'Saved {layer.name} as {filename}')
