@@ -177,3 +177,4 @@ pyrightconfig.json
 *.pgm
 .stego-venv/
 *.hdf5
+*.npy
