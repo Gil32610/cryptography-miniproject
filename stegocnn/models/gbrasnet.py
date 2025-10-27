@@ -253,7 +253,7 @@ class GBRASNET(nn.Module):
         # Output Stage
         self.output = OutputLayer(output_size=2)
 
-    def foward(self, x):
+    def forward(self, x):
         x = self.preprocessing(x)
         skip = self.feature_extract1(x)
         x += skip
