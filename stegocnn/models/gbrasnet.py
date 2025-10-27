@@ -210,3 +210,65 @@ class OutputLayer(nn.Module):
         x = self.global_avg_pool(x)
         x = self.output(x)
         return x
+    
+class GBRASNET(nn.Module):
+    def __init__(self,
+                 srm_weights,
+                 ):
+        super().__init__()
+        
+        # Preprocessing Stage
+        self.preprocessing = PreProcessing(srm_weights=srm_weights, in_channels=1, out_channels=30, kernel_size=(5,5))
+
+        # Feature Extracture Stage 1
+        self.feature_extract1 = FeatureExtractionConv(in_channels=30, out_channels=30, depth_conv_kernel_size=(1,1), separable_conv_kernel_size=(3,3))
+
+        # Simple Convolutional Stage 1
+        self.simple_conv1 = SimpleConv(in_channels=30, out_channels=30, kernel_size=(3,3))
+
+        # Simple Convolutional Stage 2
+        self.simple_conv2 = SimpleConv(in_channels=30, out_channels=30, kernel_size=(3,3))
+
+        # Dimensionality Reduction Stage 1
+        self.dim_reduc_1 = DimensionalityReductionConv(in_channels=30, avg_kernel_size=(2,2), avg_stride=(2,2), conv_kernel_size=(3,3), conv_stride=(1,1))
+
+        # Feature Extracture Stage 2
+        self.feature_extract2 = FeatureExtractionConv(in_channels=60, out_channels=60, depth_conv_kernel_size=(1,1), separable_conv_kernel_size=(3,3))
+
+        # Simple Convolutional Stage 3
+        self.simple_conv3 = SimpleConv(in_channels=60, out_channels=60, kernel_size=(3,3))
+
+        # Dimensionality Reduction Stage 2
+        self.dim_reduc_2 = DimensionalityReductionConv(in_channels=60, avg_kernel_size=(2,2), avg_stride=(2,2), conv_kernel_size=(3,3), conv_stride=(1,1))
+
+        # Dimensionality Reduction Stage 3
+        self.dim_reduc_3 = DimensionalityReductionConv(in_channels=60, avg_kernel_size=(2,2), avg_stride=(2,2), conv_kernel_size=(3,3), conv_stride=(1,1))
+
+        # Dimensionality Reduction Stage 4
+        self.dim_reduc_4 = DimensionalityReductionConv(in_channels=60, avg_kernel_size=(2,2), avg_stride=(2,2), conv_kernel_size=(1,1), conv_stride=(1,1))
+
+        # Simple Convolutional Stage 4
+        self.simple_conv4 = SimpleConv(in_channels=2, out_channels=2, kernel_size=(1,1))
+
+        # Output Stage
+        self.output = OutputLayer(output_size=2)
+
+    def foward(self, x):
+        x = self.preprocessing(x)
+        skip = self.feature_extract1(x)
+        x += skip
+
+        x = self.simple_conv1(x)
+        x = self.simple_conv2(x)
+        x = self.dim_reduc_1(x)
+        skip = self.feature_extract2(x)
+        x += skip
+
+        x = self.simple_conv3(x)
+        x = self.dim_reduc_2(x)
+        x = self.dim_reduc_3(x)
+        x = self.dim_reduc_4(x)
+        x = self.simple_conv4(x)
+        x = self.output(x)
+
+        return x
