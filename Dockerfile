@@ -22,5 +22,7 @@ WORKDIR /app
 
 COPY . /app
 
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir tensorflow-gpu==2.2.0 && \
+    pip install --no-cache-dir -r requirements.txt
+
 
