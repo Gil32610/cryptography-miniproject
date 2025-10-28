@@ -12,4 +12,4 @@ if __name__ == '__main__':
     dataset_test = PGMImageDataset(cover_path=cover_path, stego_path=stego_path, stego_algorithm=stego_algorithm, test=True)
     srm_path = '../data/kernels/SRM_Kernels1.npy'
     model = GBRASNET(srm_path=srm_path)
-    train_pytorch(model=model,dataset_train=dataset_train, dataset_val=dataset_val, dataset_test=dataset_test)
+    train_pytorch(model=model,dataset_train=dataset_train, dataset_val=dataset_val, dataset_test=dataset_test, batch_size=16)

@@ -36,7 +36,7 @@ class PGMImageDataset(Dataset):
         return len(self.ix)
         
     def __getitem__(self, index):
-        index = ((index - 0) / (len(self.ix)- 1 - 0)) * (self.ix.max() - self.ix.min()) + self.ix.min()
+        index = int(((index - 0) / (len(self.ix)- 1 - 0)) * (self.ix.max() - self.ix.min()) + self.ix.min())
         index +=1
         cover_image = Image.open(os.path.join(self.cover_path,self.cover_images[index])).convert('L')
         stego_image = Image.open(os.path.join(self.stego_path,self.stego_images[index])).convert('L')
