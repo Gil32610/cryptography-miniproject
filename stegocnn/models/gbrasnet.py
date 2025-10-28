@@ -1,10 +1,11 @@
 import torch
 import torch.nn as nn
 from activation import TanH3
+from utils import WeightExtractor
 
 class PreProcessing(nn.Module):
     def __init__(self,
-                 srm_weights,
+                 srm_path,
                  in_channels,
                  out_channels,
                  kernel_size,
@@ -20,11 +21,8 @@ class PreProcessing(nn.Module):
             padding=padding,
             bias=True
             )
-        self.conv_filter.weight = nn.Parameter(
-            torch.tensor(srm_weights),
-            requires_grad=False
-            )
-        nn.init.ones(self.conv_filter.bias)
+      
+        nn.init.ones_(self.conv_filter.bias)
         self.activation = TanH3()
         self.batch_norm = nn.BatchNorm2d(
             num_features=out_channels,
@@ -33,10 +31,22 @@ class PreProcessing(nn.Module):
             affine=True,
             track_running_stats=True
             )
+        
+        srm_weights, srm_bias = WeightExtractor.extract_srm_kernels(srm_path)
+        print(srm_weights.shape)
+        print(srm_bias.shape)
+        with torch.no_grad():
+            self.conv_filter.weight.copy_(srm_weights)
+            self.conv_filter.bias.copy_(srm_bias)
+            
+        self.conv_filter.weight.requires_grad = False
+        self.conv_filter.bias.requires_grad = False
+        
         self.batch_norm.weight.requires_grad = False
         self.batch_norm.bias.requires_grad = True
         
     def forward(self, x):
+        print(x.shape)
         x = self.conv_filter(x)
         x = self.activation(x)
         x = self.batch_norm(x)
@@ -65,6 +75,7 @@ class FeatureExtractionConv(nn.Module):
             kernel_size=separable_conv_kernel_size
             )
         self.batch_norm1 = nn.BatchNorm2d(
+            num_features=out_channels,
             momentum=.8,
             eps=1e-3,
             affine=True,
@@ -86,6 +97,7 @@ class FeatureExtractionConv(nn.Module):
             kernel_size=separable_conv_kernel_size
             )
         self.batch_norm2 = nn.BatchNorm2d(
+            num_features=out_channels,
             momentum=.8,
             eps=1e-3,
             affine=True,
@@ -138,7 +150,8 @@ class DimensionalityReductionConv(nn.Module):
                  avg_kernel_size,
                  avg_stride,
                  conv_kernel_size,
-                 conv_stride
+                 conv_stride,
+                 out_channels=60,
                  ):
         super().__init__()
         self.average_pooling = nn.AvgPool2d(
@@ -147,10 +160,12 @@ class DimensionalityReductionConv(nn.Module):
             )
         self.conv = nn.Conv2d(
             in_channels=in_channels,
+            out_channels=out_channels,
             kernel_size=conv_kernel_size,
             stride=conv_stride
             )
         self.batch_norm = nn.BatchNorm2d(
+            num_features=out_channels,
             momentum=.8,
             eps=1e-3,
             affine=True,
@@ -185,6 +200,7 @@ class SimpleConv(nn.Module):
         )
         self.activation = nn.ELU()
         self.batch_norm = nn.BatchNorm2d(
+            num_features=out_channels,
             momentum=.8,
             eps=1e-3,
             affine=True,
@@ -192,7 +208,7 @@ class SimpleConv(nn.Module):
         )
         nn.init.xavier_uniform_(self.conv.weight)
         if self.conv.bias is not None:
-            nn.init.xavier_uniform_(self.conv.bias)
+            nn.init.zeros_(self.conv.bias)
             
     def forward(self,x):
         x = self.conv(x)
@@ -212,13 +228,11 @@ class OutputLayer(nn.Module):
         return x
     
 class GBRASNET(nn.Module):
-    def __init__(self,
-                 srm_weights,
-                 ):
+    def __init__(self, srm_path):
         super().__init__()
         
         # Preprocessing Stage
-        self.preprocessing = PreProcessing(srm_weights=srm_weights, in_channels=1, out_channels=30, kernel_size=(5,5))
+        self.preprocessing = PreProcessing(srm_path=srm_path,in_channels=1, out_channels=30, kernel_size=(5,5))
 
         # Feature Extracture Stage 1
         self.feature_extract1 = FeatureExtractionConv(in_channels=30, out_channels=30, depth_conv_kernel_size=(1,1), separable_conv_kernel_size=(3,3))
@@ -245,7 +259,7 @@ class GBRASNET(nn.Module):
         self.dim_reduc_3 = DimensionalityReductionConv(in_channels=60, avg_kernel_size=(2,2), avg_stride=(2,2), conv_kernel_size=(3,3), conv_stride=(1,1))
 
         # Dimensionality Reduction Stage 4
-        self.dim_reduc_4 = DimensionalityReductionConv(in_channels=60, avg_kernel_size=(2,2), avg_stride=(2,2), conv_kernel_size=(1,1), conv_stride=(1,1))
+        self.dim_reduc_4 = DimensionalityReductionConv(in_channels=60,out_channels=30, avg_kernel_size=(2,2), avg_stride=(2,2), conv_kernel_size=(1,1), conv_stride=(1,1))
 
         # Simple Convolutional Stage 4
         self.simple_conv4 = SimpleConv(in_channels=2, out_channels=2, kernel_size=(1,1))
