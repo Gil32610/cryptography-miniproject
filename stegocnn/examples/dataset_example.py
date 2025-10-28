@@ -5,4 +5,6 @@ if __name__ == '__main__':
     stego_path='../data/BOSSbase-1.01/stego'
     stego_algorithm = 'HILL'
     dataset = PGMImageDataset(cover_path=cover_path, stego_path=stego_path, stego_algorithm=stego_algorithm)
-    print(dataset[0])
+    images, labels = dataset[0] 
+    print(images.shape, labels.shape)
+    print(len(dataset))
