@@ -7,7 +7,10 @@ import time as tm
 import datetime
 import os
 from sklearn.metrics import accuracy_score
+from torch.amp import autocast, GradScaler
 
+
+scaler = GradScaler(device="cuda", enabled=True)
 
 def evaluate_model(model, data_loader, loss_fn, device):
     """Evaluates the model on a given dataset."""
@@ -16,20 +19,25 @@ def evaluate_model(model, data_loader, loss_fn, device):
     all_preds = []
     all_labels = []
 
+    total_batches = len(data_loader)
+    
     with torch.no_grad():
-        for X, y in data_loader:
+        for batch_idx, (X, y) in enumerate(data_loader, start=1):
+            print(f"Batch {batch_idx}/{total_batches}", end="\r")
             X, y = X.to(device), y.to(device)
             outputs = model(X)
             loss = loss_fn(outputs, y)
+            print(loss)
             total_loss += loss.item() * X.size(0)
 
             # Get predictions
             _, predicted = torch.max(outputs.data, 1)
             all_preds.extend(predicted.cpu().numpy())
             all_labels.extend(y.cpu().numpy())
-
+    print()
     avg_loss = total_loss / len(data_loader.dataset)
     accuracy = accuracy_score(all_labels, all_preds)
+    torch.cuda.empty_cache()
     return avg_loss, accuracy
 
 def train_pytorch(model,dataset_train, dataset_val, dataset_test, model_name="", path_log_base="logs", batch_size=32, epochs=100):
@@ -47,6 +55,7 @@ def train_pytorch(model,dataset_train, dataset_val, dataset_test, model_name="",
     
     start_time = tm.time()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(device)
     model.to(device)
 
     train_loader = DataLoader(dataset_train, collate_fn=pair_collate_fn, batch_size=batch_size, shuffle=True)
@@ -76,19 +85,23 @@ def train_pytorch(model,dataset_train, dataset_val, dataset_test, model_name="",
         for batch_idx, (X, y) in enumerate(train_loader):
             X, y = X.to(device), y.to(device)
             
-            outputs = model(X)
-            loss = loss_fn(outputs, y)
-            
             optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+            
+            with autocast('cuda',dtype=torch.float16):
+                outputs = model(X)
+                loss = loss_fn(outputs, y)
+            
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+    
             
             running_loss += loss.item()
         
         train_loss = running_loss / len(train_loader)
         
         val_loss, val_accuracy = evaluate_model(model, valid_loader, loss_fn, device)
-        
+        torch.cuda.empty_cache()
         print(f"Epoch {epoch:03d}/{epochs} - Loss: {train_loss:.4f} - val_loss: {val_loss:.4f} - val_accuracy: {val_accuracy:.4f}")
 
         writer.add_scalar('Loss/train', train_loss, epoch)
