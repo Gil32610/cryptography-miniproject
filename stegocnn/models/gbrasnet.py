@@ -33,8 +33,7 @@ class PreProcessing(nn.Module):
             )
         
         srm_weights, srm_bias = WeightExtractor.extract_srm_kernels(srm_path)
-        print(srm_weights.shape)
-        print(srm_bias.shape)
+    
         with torch.no_grad():
             self.conv_filter.weight.copy_(srm_weights)
             self.conv_filter.bias.copy_(srm_bias)
@@ -46,7 +45,6 @@ class PreProcessing(nn.Module):
         self.batch_norm.bias.requires_grad = True
         
     def forward(self, x):
-        print(x.shape)
         x = self.conv_filter(x)
         x = self.activation(x)
         x = self.batch_norm(x)
@@ -128,6 +126,7 @@ class SeparableConv(nn.Module):
             out_channels=in_channels*depth_multiplier,
             kernel_size=kernel_size,
             groups=in_channels,
+            padding=1,
             bias=False
             )
         self.pointwise = nn.Conv2d(
@@ -220,11 +219,10 @@ class OutputLayer(nn.Module):
     def __init__(self, output_size):
         super().__init__()
         self.global_avg_pool = nn.AdaptiveAvgPool2d(output_size=output_size)
-        self.output = nn.Softmax(dim=1)
         
     def forward(self, x):
         x = self.global_avg_pool(x)
-        x = self.output(x)
+        x = x = x.view(x.size(0), -1)
         return x
     
 class GBRASNET(nn.Module):
@@ -232,7 +230,7 @@ class GBRASNET(nn.Module):
         super().__init__()
         
         # Preprocessing Stage
-        self.preprocessing = PreProcessing(srm_path=srm_path,in_channels=1, out_channels=30, kernel_size=(5,5))
+        self.preprocessing = PreProcessing(srm_path=srm_path,in_channels=1, out_channels=30, kernel_size=(5,5),padding=2)
 
         # Feature Extracture Stage 1
         self.feature_extract1 = FeatureExtractionConv(in_channels=30, out_channels=30, depth_conv_kernel_size=(1,1), separable_conv_kernel_size=(3,3))
@@ -262,13 +260,14 @@ class GBRASNET(nn.Module):
         self.dim_reduc_4 = DimensionalityReductionConv(in_channels=60,out_channels=30, avg_kernel_size=(2,2), avg_stride=(2,2), conv_kernel_size=(1,1), conv_stride=(1,1))
 
         # Simple Convolutional Stage 4
-        self.simple_conv4 = SimpleConv(in_channels=2, out_channels=2, kernel_size=(1,1))
+        self.simple_conv4 = SimpleConv(in_channels=30, out_channels=2, kernel_size=(1,1), padding=0)
 
         # Output Stage
-        self.output = OutputLayer(output_size=2)
+        self.output = OutputLayer(output_size=1)
 
     def forward(self, x):
         x = self.preprocessing(x)
+        
         skip = self.feature_extract1(x)
         x += skip
 
@@ -284,5 +283,4 @@ class GBRASNET(nn.Module):
         x = self.dim_reduc_4(x)
         x = self.simple_conv4(x)
         x = self.output(x)
-
         return x
