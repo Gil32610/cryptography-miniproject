@@ -123,6 +123,83 @@ def train_pytorch(model,dataset_train, dataset_val, dataset_test, model_name="",
     
     return {"test_loss": final_test_loss, "test_accuracy": final_test_accuracy}
 
+def train_knowledge_distillation(teacher, student, dataset_train, dataset_val, dataset_test, epochs, learning_rate, T, soft_target_loss_weight, ce_loss_weight, device, model_name="", path_log_base="logs", batch_size=32):
+    start_time = tm.time()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    student.to(device)
+
+    train_loader = DataLoader(dataset_train, collate_fn=pair_collate_fn, batch_size=batch_size, shuffle=True)
+    valid_loader = DataLoader(dataset_val, collate_fn=pair_collate_fn, batch_size=batch_size)
+    test_loader  = DataLoader(dataset_test, collate_fn=pair_collate_fn, batch_size=batch_size)
+
+    ce_loss = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(student.parameters(), lr=learning_rate)
+
+    log_timestamp = datetime.datetime.now().isoformat()[:19].replace("T", "_").replace(":", "-")
+    log_dir = os.path.join(path_log_base, f"{model_name}_{log_timestamp}")
+    os.makedirs(log_dir, exist_ok=True)
+    writer = SummaryWriter(log_dir)
+
+    lossTEST, accuracyTEST = evaluate_model(student, test_loader, ce_loss, device)
+    lossTRAIN, accuracyTRAIN = evaluate_model(student, train_loader, ce_loss, device)
+    lossVALID, accuracyVALID = evaluate_model(student, valid_loader, ce_loss, device)
+
+    teacher.eval()  # Teacher set to evaluation mode
+
+    print(f"Initial Metrics - Train Loss: {lossTRAIN:.4f}, Acc: {accuracyTRAIN:.4f} | Valid Loss: {lossVALID:.4f}, Acc: {accuracyVALID:.4f} | Test Loss: {lossTEST:.4f}, Acc: {accuracyTEST:.4f}")
+    print("Starting the training...")
+    for epoch in range(epochs):
+        student.train() # Student to train mode
+        running_loss = 0.0
+        for inputs, labels in train_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+
+            optimizer.zero_grad()
+
+            with torch.no_grad():
+                teacher_logits = teacher(inputs)
+
+            student_logits = student(inputs)
+
+            soft_targets = nn.functional.softmax(teacher_logits / T, dim=-1) # maybe 1? João
+            soft_prob = nn.functional.log_softmax(student_logits / T, dim=-1) # maybe 1? João
+
+            soft_targets_loss = torch.sum(soft_targets * (soft_targets.log() - soft_prob)) / soft_prob.size()[0] * (T**2)
+
+            label_loss = ce_loss(student_logits, labels)
+
+            loss = soft_target_loss_weight * soft_targets_loss + ce_loss_weight * label_loss
+
+            loss.backward()
+            optimizer.step()
+
+            running_loss += loss.item()
+
+        train_loss = running_loss / len(train_loader)
+        
+        val_loss, val_accuracy = evaluate_model(student, valid_loader, ce_loss, device)
+        
+        print(f"Epoch {epoch:03d}/{epochs} - Loss: {train_loss:.4f} - val_loss: {val_loss:.4f} - val_accuracy: {val_accuracy:.4f}")
+
+        writer.add_scalar('Loss/train', train_loss, epoch)
+        writer.add_scalar('Loss/valid', val_loss, epoch)
+        writer.add_scalar('Accuracy/valid', val_accuracy, epoch)
+        
+        checkpoint_path = os.path.join(log_dir, f"saved-model-{epoch:03d}-{val_accuracy:.4f}.pth")
+        torch.save(student.state_dict(), checkpoint_path)
+
+        print(f"Epoch {epoch+1}/{epochs}, Loss: {running_loss / len(train_loader)}")
+    
+     writer.close()
+    
+    final_test_loss, final_test_accuracy = evaluate_model(student, test_loader, ce_loss, device)
+    
+    TIME = tm.time() - start_time
+    print(f"Time {model_name} = {TIME:.2f} [seconds]")
+    print("\n")
+    print(log_dir)
+    
+    return {"test_loss": final_test_loss, "test_accuracy": final_test_accuracy}
 def pair_collate_fn(batch):
     images, labels = [], []
     
