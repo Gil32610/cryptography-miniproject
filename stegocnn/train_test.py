@@ -32,13 +32,13 @@ def evaluate_model(model, data_loader, loss_fn, device):
     accuracy = accuracy_score(all_labels, all_preds)
     return avg_loss, accuracy
 
-def train_pytorch(model, X_train, y_train, X_valid, y_valid, X_test, y_test, batch_size, epochs, model_name="", path_log_base="logs"):
+def train_pytorch(model,dataset_train, dataset_val, dataset_test, model_name="", path_log_base="logs", batch_size=32, epochs=100):
     """
     Trains a PyTorch model.
 
     Args:
         model (nn.Module): The PyTorch model to train.
-        X_train, y_train, X_valid, y_valid, X_test, y_test (np.ndarray or torch.Tensor): Data splits.
+        datasets_* : torch Dataset objects
         batch_size (int): Batch size for training.
         epochs (int): Number of training epochs.
         model_name (str): Name for logging and saving.
@@ -49,20 +49,9 @@ def train_pytorch(model, X_train, y_train, X_valid, y_valid, X_test, y_test, bat
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
-    X_train_t = torch.tensor(X_train, dtype=torch.float32)
-    y_train_t = torch.tensor(y_train, dtype=torch.long) # Use torch.long for classification labels
-    X_valid_t = torch.tensor(X_valid, dtype=torch.float32)
-    y_valid_t = torch.tensor(y_valid, dtype=torch.long)
-    X_test_t  = torch.tensor(X_test, dtype=torch.float32)
-    y_test_t  = torch.tensor(y_test, dtype=torch.long)
-
-    train_dataset = TensorDataset(X_train_t, y_train_t)
-    valid_dataset = TensorDataset(X_valid_t, y_valid_t)
-    test_dataset  = TensorDataset(X_test_t, y_test_t)
-
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    valid_loader = DataLoader(valid_dataset, batch_size=batch_size)
-    test_loader  = DataLoader(test_dataset, batch_size=batch_size)
+    train_loader = DataLoader(dataset_train, collate_fn=pair_collate_fn, batch_size=batch_size, shuffle=True)
+    valid_loader = DataLoader(dataset_val, collate_fn=pair_collate_fn, batch_size=batch_size)
+    test_loader  = DataLoader(dataset_test, collate_fn=pair_collate_fn, batch_size=batch_size)
 
     loss_fn = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters())
@@ -71,7 +60,7 @@ def train_pytorch(model, X_train, y_train, X_valid, y_valid, X_test, y_test, bat
     log_dir = os.path.join(path_log_base, f"{model_name}_{log_timestamp}")
     os.makedirs(log_dir, exist_ok=True)
     writer = SummaryWriter(log_dir)
-    best_val_accuracy = -1.0 # For saving the best model
+    
 
     lossTEST, accuracyTEST = evaluate_model(model, test_loader, loss_fn, device)
     lossTRAIN, accuracyTRAIN = evaluate_model(model, train_loader, loss_fn, device)
@@ -120,4 +109,17 @@ def train_pytorch(model, X_train, y_train, X_valid, y_valid, X_test, y_test, bat
     print(log_dir)
     
     return {"test_loss": final_test_loss, "test_accuracy": final_test_accuracy}
+
+def pair_collate_fn(batch):
+    images, labels = [], []
+    
+    for cover_pair, stego_pair in batch:
+        cover_img, cover_lbl = cover_pair
+        stego_img, stego_lbl = stego_pair
+        images.extend([cover_img, stego_img])
+        labels.extend([cover_lbl, stego_lbl])
+    
+    images = torch.stack(images)
+    labels = torch.stack(labels)
+    return images, labels
 

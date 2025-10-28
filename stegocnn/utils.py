@@ -2,7 +2,8 @@ from torchvision import transforms
 import torch
 import os
 import numpy as np
-import tensorflow as tf
+import tensorflow as tf 
+from typing import Tuple
 
 class Tensor255:
     def __call__(self, img):
@@ -26,3 +27,11 @@ class WeightExtractor:
             weights = layer.get_weights()
             np.save(path,arr=weights)
             print(f'Saved {layer.name} as {filename}')
+            
+    @staticmethod
+    def extract_srm_kernels(path) -> Tuple[torch.Tensor]:
+        srm_weights = np.load(path)
+        srm_weights = torch.tensor(srm_weights.transpose(3, 2, 0, 1), dtype=torch.float32)
+        srm_bias = np.ones(30,dtype=np.float32)
+        srm_bias = torch.tensor(srm_bias, dtype=torch.float32)
+        return srm_weights, srm_bias
