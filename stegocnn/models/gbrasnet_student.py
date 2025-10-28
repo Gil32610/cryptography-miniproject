@@ -248,12 +248,12 @@ class GBRASNET(nn.Module):
         x = self.preprocessing(x)
         
         skip = self.feature_extract1(x)
-        x += skip
+        x = x + skip
 
         x = self.simple_conv1(x)
         x = self.dim_reduc_1(x)
         skip = self.feature_extract2(x)
-        x += skip
+        x = x + skip
 
         x = self.simple_conv3(x)
         x = self.dim_reduc_2(x)
