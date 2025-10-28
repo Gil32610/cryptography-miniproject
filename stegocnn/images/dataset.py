@@ -45,8 +45,10 @@ class PGMImageDataset(Dataset):
             cover_image = self.transform(cover_image)
             stego_image = self.transform(stego_image)
         
-        label = torch.tensor([0,1],dtype=torch.long)
-        return torch.stack((cover_image,stego_image)), label 
+        cover_label = torch.tensor(0,dtype=torch.long)
+        stego_label = torch.tensor(1,dtype=torch.long)
+        
+        return (cover_image, cover_label), (stego_image, stego_label) 
     
     
 
