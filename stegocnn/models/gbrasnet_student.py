@@ -60,27 +60,6 @@ class FeatureExtractionConv(nn.Module):
                  depth_multiplier=3
                  ):
         super().__init__()
-        self.depth_wise_conv1 = nn.Conv2d(
-            in_channels=in_channels,
-            out_channels=out_channels,
-            kernel_size=depth_conv_kernel_size,
-            groups=in_channels
-        )
-        self.separable_conv1 = SeparableConv(
-            in_channels=in_channels,
-            out_channels=out_channels,
-            depth_multiplier=depth_multiplier,
-            kernel_size=separable_conv_kernel_size
-            )
-        self.batch_norm1 = nn.BatchNorm2d(
-            num_features=out_channels,
-            momentum=.8,
-            eps=1e-3,
-            affine=True,
-            track_running_stats=True
-        )
-        self.batch_norm1.weight.requires_grad = False
-        self.batch_norm1.bias.requires_grad = True
         
         self.depth_wise_conv2 = nn.Conv2d(
             in_channels=in_channels,
@@ -272,7 +251,6 @@ class GBRASNET(nn.Module):
         x += skip
 
         x = self.simple_conv1(x)
-        x = self.simple_conv2(x)
         x = self.dim_reduc_1(x)
         skip = self.feature_extract2(x)
         x += skip
