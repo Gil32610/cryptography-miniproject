@@ -190,7 +190,7 @@ def train_knowledge_distillation(teacher, student, dataset_train, dataset_val, d
 
         print(f"Epoch {epoch+1}/{epochs}, Loss: {running_loss / len(train_loader)}")
     
-     writer.close()
+    writer.close()
     
     final_test_loss, final_test_accuracy = evaluate_model(student, test_loader, ce_loss, device)
     
