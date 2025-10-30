@@ -262,7 +262,7 @@ class OutputLayer(nn.Module):
         x = x = x.view(x.size(0), -1)
         return x
     
-class GBRASNET(nn.Module):
+class GBRASNETStudent(nn.Module):
     def __init__(self, srm_path):
         super().__init__()
         
