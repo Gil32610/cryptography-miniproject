@@ -123,7 +123,7 @@ def train_pytorch(model,dataset_train, dataset_val, dataset_test, model_name="",
     
     return {"test_loss": final_test_loss, "test_accuracy": final_test_accuracy}
 
-def train_knowledge_distillation(teacher, student, dataset_train, dataset_val, dataset_test, epochs, learning_rate, T, soft_target_loss_weight, ce_loss_weight, device, model_name="", path_log_base="logs", batch_size=32):
+def train_knowledge_distillation(teacher, student, dataset_train, dataset_val, dataset_test, epochs, learning_rate, T, soft_target_loss_weight, ce_loss_weight, model_name="", path_log_base="logs", batch_size=16):
     start_time = tm.time()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     student.to(device)
