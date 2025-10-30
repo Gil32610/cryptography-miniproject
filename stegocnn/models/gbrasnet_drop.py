@@ -64,9 +64,9 @@ class PreProcessing(nn.Module):
         
     def forward(self, x):
         x = self.conv_filter(x)
-        x = self.drop_2d(x)
         x = self.activation(x)
         x = self.batch_norm(x)
+        x = self.drop_2d(x)
         return x
 
 
@@ -140,13 +140,13 @@ class FeatureExtractionConv(nn.Module):
     def forward(self, x):
         x = self.depth_wise_conv1(x)
         x = self.separable_conv1(x)
-        x = self.drop1_2d(x)
         x = self.batch_norm1(x)
+        x = self.drop1_2d(x)
 
         x = self.depth_wise_conv2(x)
         x = self.separable_conv2(x)
-        x = self.drop2_2d(x)
         x = self.batch_norm2(x)
+        x = self.drop2_2d(x)
         return x
     
 class SeparableConv(nn.Module):
@@ -239,9 +239,9 @@ class DimensionalityReductionConv(nn.Module):
     def forward(self, x):
         x = self.average_pooling(x)
         x = self.conv(x)
-        x = self.drop_2d(x)
         x = self.activation(x)
         x = self.batch_norm(x)
+        x = self.drop_2d(x)
         return x
 
 class SimpleConv(nn.Module):
@@ -294,9 +294,9 @@ class SimpleConv(nn.Module):
             
     def forward(self,x):
         x = self.conv(x)
-        x = self.drop_2d(x)
         x = self.activation(x)
         x = self.batch_norm(x)
+        x = self.drop_2d(x)
         return x
     
 class OutputLayer(nn.Module):
@@ -309,42 +309,42 @@ class OutputLayer(nn.Module):
         x = x = x.view(x.size(0), -1)
         return x
     
-class GBRASNET(nn.Module):
-    def __init__(self, srm_path, drop_p):
+class GBRASNETDrop(nn.Module):
+    def __init__(self, srm_path):
         super().__init__()
         
         
-        self.preprocessing = PreProcessing(srm_path=srm_path,in_channels=1, out_channels=30, kernel_size=(5,5),padding='same', drop_p=drop_p)
+        self.preprocessing = PreProcessing(srm_path=srm_path,in_channels=1, out_channels=30, kernel_size=(5,5),padding='same', drop_p=0.1)
 
         # Feature Extracture Stage 1
-        self.feature_extract1 = FeatureExtractionConv(in_channels=30, out_channels=30, depth_conv_kernel_size=(1,1), separable_conv_kernel_size=(3,3), drop_p=drop_p)
+        self.feature_extract1 = FeatureExtractionConv(in_channels=30, out_channels=30, depth_conv_kernel_size=(1,1), separable_conv_kernel_size=(3,3), drop_p=0.3)
 
         # Simple Convolutional Stage 1
-        self.simple_conv1 = SimpleConv(in_channels=30, out_channels=30, kernel_size=(3,3), padding='same', drop_p=drop_p)
+        self.simple_conv1 = SimpleConv(in_channels=30, out_channels=30, kernel_size=(3,3), padding='same', drop_p=0.3)
 
         # Simple Convolutional Stage 2
-        self.simple_conv2 = SimpleConv(in_channels=30, out_channels=30, kernel_size=(3,3), padding='same', drop_p=drop_p)
+        self.simple_conv2 = SimpleConv(in_channels=30, out_channels=30, kernel_size=(3,3), padding='same', drop_p=0.3)
 
         # Dimensionality Reduction Stage 1
-        self.dim_reduc_1 = DimensionalityReductionConv(in_channels=30,out_channels=60, avg_kernel_size=(2,2), avg_stride=(2,2), conv_kernel_size=(3,3), conv_stride=(1,1), drop_p=drop_p)
+        self.dim_reduc_1 = DimensionalityReductionConv(in_channels=30,out_channels=60, avg_kernel_size=(2,2), avg_stride=(2,2), conv_kernel_size=(3,3), conv_stride=(1,1), drop_p=0.4)
 
         # Feature Extracture Stage 2
-        self.feature_extract2 = FeatureExtractionConv(in_channels=60, out_channels=60, depth_conv_kernel_size=(1,1), separable_conv_kernel_size=(3,3), drop_p=drop_p)
+        self.feature_extract2 = FeatureExtractionConv(in_channels=60, out_channels=60, depth_conv_kernel_size=(1,1), separable_conv_kernel_size=(3,3), drop_p=0.4)
 
         # Simple Convolutional Stage 3
-        self.simple_conv3 = SimpleConv(in_channels=60, out_channels=60, kernel_size=(3,3), padding='same', drop_p=drop_p)
+        self.simple_conv3 = SimpleConv(in_channels=60, out_channels=60, kernel_size=(3,3), padding='same', drop_p=0.4)
 
         # Dimensionality Reduction Stage 2
-        self.dim_reduc_2 = DimensionalityReductionConv(in_channels=60, out_channels=60, avg_kernel_size=(2,2), avg_stride=(2,2), conv_kernel_size=(3,3), conv_stride=(1,1), drop_p=drop_p)
+        self.dim_reduc_2 = DimensionalityReductionConv(in_channels=60, out_channels=60, avg_kernel_size=(2,2), avg_stride=(2,2), conv_kernel_size=(3,3), conv_stride=(1,1), drop_p=0.4)
 
         # Dimensionality Reduction Stage 3
-        self.dim_reduc_3 = DimensionalityReductionConv(in_channels=60,out_channels=60, avg_kernel_size=(2,2), avg_stride=(2,2), conv_kernel_size=(3,3), conv_stride=(1,1), drop_p=drop_p)
+        self.dim_reduc_3 = DimensionalityReductionConv(in_channels=60,out_channels=60, avg_kernel_size=(2,2), avg_stride=(2,2), conv_kernel_size=(3,3), conv_stride=(1,1), drop_p=0.4)
 
         # Dimensionality Reduction Stage 4
-        self.dim_reduc_4 = DimensionalityReductionConv(in_channels=60, out_channels=30, avg_kernel_size=(2,2), avg_stride=(2,2), conv_kernel_size=(1,1), conv_stride=(1,1), drop_p=drop_p)
+        self.dim_reduc_4 = DimensionalityReductionConv(in_channels=60, out_channels=30, avg_kernel_size=(2,2), avg_stride=(2,2), conv_kernel_size=(1,1), conv_stride=(1,1), drop_p=0.4)
 
         # Simple Convolutional Stage 4
-        self.simple_conv4 = SimpleConv(in_channels=30, out_channels=2, kernel_size=(1,1), padding='same', drop_p=drop_p)
+        self.simple_conv4 = SimpleConv(in_channels=30, out_channels=2, kernel_size=(1,1), padding='same', drop_p=0.3)
 
         # Output Stage
         self.output = OutputLayer(output_size=1)
