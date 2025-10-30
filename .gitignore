@@ -178,3 +178,5 @@ pyrightconfig.json
 .stego-venv/
 *.hdf5
 *.npy
+data/
+logs/

@@ -104,36 +104,12 @@ class FeatureExtractionConv(nn.Module):
         self.batch_norm1.weight.requires_grad = False
         self.batch_norm1.bias.requires_grad = True
         
-        self.depth_wise_conv2 = nn.Conv2d(
-            in_channels=out_channels,
-            out_channels=out_channels,
-            kernel_size=depth_conv_kernel_size,
-            groups=out_channels,
-            padding=depth_padding
-        )
-        self.separable_conv2 = SeparableConv(
-            in_channels=out_channels,
-            out_channels=out_channels,
-            depth_multiplier=depth_multiplier,
-            kernel_size=separable_conv_kernel_size
-            )
-        self.batch_norm2 = nn.BatchNorm2d(
-            num_features=out_channels,
-            momentum=.8,
-            eps=1e-3,
-            affine=True,
-            track_running_stats=True
-        )
-        self.batch_norm2.weight.requires_grad = False
-        self.batch_norm2.bias.requires_grad = True
+
         
     def forward(self, x):
         x = self.depth_wise_conv1(x)
         x = self.separable_conv1(x)
         x = self.batch_norm1(x)
-        x = self.depth_wise_conv2(x)
-        x = self.separable_conv2(x)
-        x = self.batch_norm2(x)
         return x
     
 class SeparableConv(nn.Module):
@@ -286,7 +262,7 @@ class OutputLayer(nn.Module):
         x = x = x.view(x.size(0), -1)
         return x
     
-class GBRASNET(nn.Module):
+class GBRASNETStudent(nn.Module):
     def __init__(self, srm_path):
         super().__init__()
         
@@ -298,9 +274,6 @@ class GBRASNET(nn.Module):
 
         # Simple Convolutional Stage 1
         self.simple_conv1 = SimpleConv(in_channels=30, out_channels=30, kernel_size=(3,3), padding='same')
-
-        # Simple Convolutional Stage 2
-        self.simple_conv2 = SimpleConv(in_channels=30, out_channels=30, kernel_size=(3,3), padding='same')
 
         # Dimensionality Reduction Stage 1
         self.dim_reduc_1 = DimensionalityReductionConv(in_channels=30,out_channels=60, avg_kernel_size=(2,2), avg_stride=(2,2), conv_kernel_size=(3,3), conv_stride=(1,1))
@@ -333,7 +306,6 @@ class GBRASNET(nn.Module):
         x = x + skip
 
         x = self.simple_conv1(x)
-        x = self.simple_conv2(x)
         x = self.dim_reduc_1(x)
         skip = self.feature_extract2(x)
         x = x + skip
