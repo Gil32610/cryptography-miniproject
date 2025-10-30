@@ -1,7 +1,6 @@
 from train_test import train_pytorch
 from images.dataset import PGMImageDataset
 from models.gbrasnet_drop import GBRASNET
-import pdb
 
 if __name__ == '__main__':
     cover_path='../data/BOSSbase-1.01/cover'
