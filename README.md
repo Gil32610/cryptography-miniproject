@@ -1,6 +1,6 @@
 # Cryptography Miniproject
 
-This repository is part of a project developed during the Cryptography class on the Computer Science graduation at Catholic University of Pernambuco (UNICAP). It was based on the state-of-the-art steganalysis machine learning model GBRAS-Net, implemented by @BioAITeam.
+This repository is part of a project developed during the Cryptography class on the Computer Science graduation at Catholic University of Pernambuco (UNICAP). It was based on the state-of-the-art steganalysis machine learning model GBRAS-Net, implemented by [@BioAITeam](https://github.com/BioAITeam) .
 ```
 @ARTICLE{GBRAS2021,  
   author={Reinel, Tabares-Soto and Brayan, Arteaga-Arteaga Harold and Alejandro, Bravo-Ortiz Mario and Alejandro, Mora-Rubio and Daniel, Arias-Garzón and Alejandro, Alzate-Grisales Jesús and Buenaventura, Burbano-Jacome Alejandro and Simon, Orozco-Arias and Gustavo, Isaza and Raúl, Ramos-Pollán},  
