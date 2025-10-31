@@ -136,74 +136,129 @@ class Plotter:
         plt.close()
         return cm
     
-    def compare_integrated_gradients(self,models_dict, dataloader, device, num_samples=3, save_path=None):
-    
-        # Collect random samples
-        images_list, labels_list = [], []
-        for images, labels in dataloader:
-            images_list.append(images)
-            labels_list.append(labels)
-        images_all = torch.cat(images_list)
-        labels_all = torch.cat(labels_list)
+    def compare_integrated_gradients(self, models_dict, dataloader, device, num_samples=3, save_path=None):
+        
+        # --- 1. Collect Paired Samples ---
+        # Note: Your dataloader now yields (cover_pair, stego_pair) due to the dataset structure.
+        # We need to use the default collate if not explicitly using pair_collate_fn
+        # Let's collect the pairs explicitly.
+        
+        all_samples = []
+        
+        # We must iterate over the dataloader until we collect enough unique pairs
+        for batch in dataloader:
+            # batch is a list of tuples: [((cover_img_1, cover_lbl_1), (stego_img_1, stego_lbl_1)), ...]
+            for cover_pair, stego_pair in batch:
+                all_samples.append((cover_pair, stego_pair))
+                if len(all_samples) >= num_samples:
+                    break
+            if len(all_samples) >= num_samples:
+                break
+        
+        if not all_samples:
+            print("No samples loaded from dataloader.")
+            return
 
         # Ensure save directory exists
         if save_path:
             os.makedirs(save_path, exist_ok=True)
+            
+        num_cols = len(models_dict) + 1 # 1 for original image + N for models
+        num_rows = 2 # 1 for Cover, 1 for Stego
+        
+        # --- 2. Process Samples and Plot Grid ---
+        for i, (cover_pair, stego_pair) in enumerate(all_samples[:num_samples]):
+            
+            cover_img, cover_label = cover_pair
+            stego_img, stego_label = stego_pair
+            
+            # Prepare images for model input (add batch dim, move to device)
+            cover_img_in = cover_img.unsqueeze(0).to(device)
+            stego_img_in = stego_img.unsqueeze(0).to(device)
+            
+            # Store image/label data for easy access during plotting
+            image_data = [
+                {'img': cover_img_in, 'actual_label': cover_label.item(), 'name': 'Cover'},
+                {'img': stego_img_in, 'actual_label': stego_label.item(), 'name': 'Stego'}
+            ]
 
-        # Pick random indices
-        idxs = np.random.choice(len(images_all), num_samples, replace=False)
-
-        for i, idx in enumerate(idxs):
-            img = images_all[idx:idx+1].to(device)
-            label = labels_all[idx].item()
-
-            fig, axes = plt.subplots(1, len(models_dict) + 1, figsize=(5 * (len(models_dict) + 1), 5))
-
-            # Plot the original image
-            ax = axes[0]
-            ax.imshow(img.squeeze().cpu().numpy(), cmap='gray')
-            ax.set_title(f"Original (Label={label})")
-            ax.axis('off')
-
-            # For each model
-            for j, (model_name, model) in enumerate(models_dict.items(), start=1):
-                model.eval()
-                model.to(device)
-
-                ig = IntegratedGradients(model)
-                img.requires_grad_()
-
-                # Compute Integrated Gradients
-                attributions, delta = ig.attribute(
-                    img, target=None, return_convergence_delta=True
-                )
-
-                # Get prediction
-                with torch.no_grad():
-                    output = model(img)
-                    pred = torch.argmax(output, dim=1).item()
-
-                # Normalize attributions
-                attr = attributions.squeeze().cpu().detach().numpy()
-                attr_norm = (attr - attr.min()) / (attr.max() - attr.min() + 1e-8)
-
-                # Blend grayscale with colorful heatmap
-                img_np = img.squeeze().cpu().numpy()
-                overlay = np.stack([img_np, img_np, img_np], axis=-1)
-                heatmap = plt.cm.jet(attr_norm)[..., :3]
-                blended = 0.4 * overlay + 0.6 * heatmap
-
-                # Plot attribution map
-                ax = axes[j]
-                ax.imshow(blended)
-                ax.set_title(f"{model_name}\nPred: {pred}")
+            # Create the 2xN subplot grid (Rows: Cover, Stego | Cols: Original, Model 1, ...)
+            fig, axes = plt.subplots(num_rows, num_cols, 
+                                     figsize=(5 * num_cols, 5 * num_rows), 
+                                     facecolor='black')
+            
+            
+            # Iterate over the Cover and Stego images (rows)
+            for r, data in enumerate(image_data):
+                img_in = data['img']
+                actual_label = data['actual_label']
+                img_name = data['name']
+                
+                # --- A. Plot the Original Image (Column 0) ---
+                ax = axes[r, 0]
+                ax.set_facecolor('black')
+                # Squeeze, move to CPU, convert to numpy for plotting
+                img_np = img_in.squeeze().cpu().numpy() 
+                ax.imshow(img_np, cmap='gray')
+                
+                # Add overall title for the row
+                if r == 0:
+                    ax.set_title(f"Original Image", color='white')
+                
+                # Plot row label and actual label
+                ax.set_ylabel(f"**{img_name}**\n(Actual={actual_label})", 
+                              color='white', fontsize=12, fontweight='bold')
                 ax.axis('off')
-
+                
+                # --- B. Plot Attributions for Each Model (Columns 1 to N) ---
+                for c, (model_name, model) in enumerate(models_dict.items(), start=1):
+                    model.eval()
+                    model.to(device)
+        
+                    ig = IntegratedGradients(model)
+                    img_in.requires_grad_()
+        
+                    # Get prediction first
+                    with torch.no_grad():
+                        output = model(img_in)
+                        pred = torch.argmax(output, dim=1).item()
+        
+                    # Compute Integrated Gradients for predicted class
+                    attributions, delta = ig.attribute(
+                        img_in, target=pred, return_convergence_delta=True
+                    )
+        
+                    # Normalize and blend attributions
+                    attr = attributions.squeeze().cpu().detach().numpy()
+                    attr_norm = (attr - attr.min()) / (attr.max() - attr.min() + 1e-8)
+        
+                    # Handle single channel image blending (grayscale image into RGB for blending)
+                    img_np_rgb = np.stack([img_np, img_np, img_np], axis=-1)
+                    heatmap = plt.cm.jet(attr_norm)[..., :3]
+                    blended = 0.4 * img_np_rgb + 0.6 * heatmap
+        
+                    # Plot attribution map
+                    ax = axes[r, c]
+                    ax.set_facecolor('black')
+                    ax.imshow(blended)
+                    
+                    # Set title for the column (only on the top row)
+                    if r == 0:
+                        ax.set_title(f"{model_name}", color='white')
+                        
+                    # Set prediction label for the current image
+                    pred_status = "CORRECT" if pred == actual_label else "WRONG"
+                    ax.text(0.5, -0.1, f"Pred: {pred} ({pred_status})", 
+                            size=10, ha="center", transform=ax.transAxes, color='white')
+                    
+                    ax.axis('off')
+        
             plt.tight_layout()
-
+            
+            # --- 3. Save or Show Plot ---
             if save_path:
-                file_name = f"integrated_gradients_sample_{i+1}.png"
-                plt.savefig(os.path.join(save_path, file_name), bbox_inches='tight')
-                plt.close()
+                file_name = f"integrated_gradients_pair_sample_{i+1}.png"
+                plt.savefig(os.path.join(save_path, file_name), bbox_inches='tight', facecolor='black')
+                plt.close(fig) # Use plt.close(fig) to explicitly close the current figure
             else:
                 plt.show()
