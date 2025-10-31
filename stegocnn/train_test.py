@@ -40,7 +40,7 @@ def evaluate_model(model, data_loader, loss_fn, device):
     torch.cuda.empty_cache()
     return avg_loss, accuracy
 
-def train_pytorch(model,dataset_train, dataset_val, dataset_test, model_name="", path_log_base="logs", batch_size=32, epochs=100):
+def train_pytorch(model,dataset_train, dataset_val, dataset_test, model_name="", path_log_base="logs", batch_size=32, epochs=100, weight_decay=False):
     """
     Trains a PyTorch model.
 
@@ -63,7 +63,11 @@ def train_pytorch(model,dataset_train, dataset_val, dataset_test, model_name="",
     test_loader  = DataLoader(dataset_test, collate_fn=pair_collate_fn, batch_size=batch_size)
 
     loss_fn = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters())
+
+    if weight_decay == False:
+        optimizer = optim.Adam(model.parameters())
+    else:
+        optimizer = optim.Adam(model.parameters(), weight_decay=1e-4)
 
     log_timestamp = datetime.datetime.now().isoformat()[:19].replace("T", "_").replace(":", "-")
     log_dir = os.path.join(path_log_base, f"{model_name}_{log_timestamp}")
@@ -123,10 +127,11 @@ def train_pytorch(model,dataset_train, dataset_val, dataset_test, model_name="",
     
     return {"test_loss": final_test_loss, "test_accuracy": final_test_accuracy}
 
-def train_knowledge_distillation(teacher, student, dataset_train, dataset_val, dataset_test, epochs, learning_rate, T, soft_target_loss_weight, ce_loss_weight, device, model_name="", path_log_base="logs", batch_size=32):
+def train_knowledge_distillation(teacher, student, dataset_train, dataset_val, dataset_test, epochs, learning_rate, T, soft_target_loss_weight, ce_loss_weight, model_name="", path_log_base="logs", batch_size=16):
     start_time = tm.time()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     student.to(device)
+    teacher.to(device)
 
     train_loader = DataLoader(dataset_train, collate_fn=pair_collate_fn, batch_size=batch_size, shuffle=True)
     valid_loader = DataLoader(dataset_val, collate_fn=pair_collate_fn, batch_size=batch_size)
@@ -148,11 +153,16 @@ def train_knowledge_distillation(teacher, student, dataset_train, dataset_val, d
 
     print(f"Initial Metrics - Train Loss: {lossTRAIN:.4f}, Acc: {accuracyTRAIN:.4f} | Valid Loss: {lossVALID:.4f}, Acc: {accuracyVALID:.4f} | Test Loss: {lossTEST:.4f}, Acc: {accuracyTEST:.4f}")
     print("Starting the training...")
+
+    total_batches = len(train_loader)
+
     for epoch in range(epochs):
         student.train() # Student to train mode
         running_loss = 0.0
-        for inputs, labels in train_loader:
+        for batch_index, (inputs, labels) in enumerate(train_loader):
             inputs, labels = inputs.to(device), labels.to(device)
+
+            print(f"Batch index: {batch_index}/{total_batches}")
 
             optimizer.zero_grad()
 
@@ -169,6 +179,8 @@ def train_knowledge_distillation(teacher, student, dataset_train, dataset_val, d
             label_loss = ce_loss(student_logits, labels)
 
             loss = soft_target_loss_weight * soft_targets_loss + ce_loss_weight * label_loss
+
+            print(f"Epoch {epoch:03d}/{epochs} - Loss {loss}")
 
             loss.backward()
             optimizer.step()
@@ -212,4 +224,3 @@ def pair_collate_fn(batch):
     images = torch.stack(images)
     labels = torch.stack(labels)
     return images, labels
-
