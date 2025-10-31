@@ -1,4 +1,4 @@
-from models import GBRASNET
+from models import GBRASNET, GBRASNETStudent
 from analysis.plot import Plotter
 from images.dataset import PGMImageDataset
 import torch
@@ -14,7 +14,7 @@ if __name__ == '__main__':
     test=True
     )
     plotter = Plotter(dataset=dataset)
-    model = GBRASNET(srm_path='../data/kernels/SRM_Kernels1.npy')
+    model = GBRASNETStudent(srm_path='../data/kernels/SRM_Kernels1.npy')
     trained_model_path = '../data/outputs/torch/WOW_ORGIGINAL/.4bpp/saved-model-034-0.7645.pth'
     state_dict = torch.load(f=trained_model_path)
     model.load_state_dict(state_dict=state_dict)
