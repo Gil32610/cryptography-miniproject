@@ -262,3 +262,124 @@ class Plotter:
                 plt.close(fig) # Use plt.close(fig) to explicitly close the current figure
             else:
                 plt.show()
+    
+    def plot_accuracy_line(self, configs_dict, batch_size=16, num_workers=1, save_path=None):
+    
+        accuracies = []
+        config_names = []
+
+        for config_name, entry in configs_dict.items():
+            print(f"\n=== Evaluating configuration: {config_name} ===")
+
+            # Extract model and dataset
+            model_entry = entry["model"]
+            dataset = entry["dataset"]
+
+            # Handle model loading if (model, path)
+            if isinstance(model_entry, tuple):
+                model, model_path = model_entry
+                state_dict = torch.load(model_path, map_location=self.device)
+                model.load_state_dict(state_dict)
+            else:
+                model = model_entry
+
+            # Update dataset in plotter dynamically
+            self.dataset = dataset
+
+            # Compute metrics
+            metrics = self.get_metrics_results(model=model, batch_size=batch_size, num_works=num_workers)
+            accuracies.append(metrics["accuracy"] * 100)  # convert to percentage
+            config_names.append(config_name)
+
+        # --- Plotting ---
+        sns.set_theme(style="whitegrid")
+        plt.figure(figsize=(8, 5))
+        plt.plot(config_names, accuracies, marker='o', color='tab:blue', linewidth=2)
+
+        # Annotate each point with its accuracy value
+        for i, acc in enumerate(accuracies):
+            plt.text(
+                i, acc + 1,  # position slightly above the point
+                f"{acc:.2f}%",  # show two decimal places
+                ha='center', va='bottom',
+                fontsize=10, color='black', fontweight='bold'
+            )
+
+        plt.title("Model Accuracy across Data Configurations", fontsize=14)
+        plt.xlabel("Data Configuration", fontsize=12)
+        plt.ylabel("Accuracy (%)", fontsize=12)
+        plt.ylim(0, 100)
+        plt.grid(True, linestyle='--', alpha=0.6)
+        plt.tight_layout()
+
+        # Optionally save the plot
+        if save_path:
+            plt.savefig(save_path, dpi=300, bbox_inches="tight")
+            print(f"Plot saved to: {save_path}")
+
+        plt.show()
+        
+    def generate_latex_table(self, configs_dict, batch_size=16, num_workers=1, save_path=None, caption=None, label=None):
+    
+        results = []
+    
+        for config_name, entry in configs_dict.items():
+            print(f"\n=== Evaluating configuration: {config_name} ===")
+    
+            # Extract model and dataset
+            model_entry = entry["model"]
+            dataset = entry["dataset"]
+    
+            # Handle model loading if (model, path)
+            if isinstance(model_entry, tuple):
+                model, model_path = model_entry
+                state_dict = torch.load(model_path, map_location=self.device)
+                model.load_state_dict(state_dict)
+            else:
+                model = model_entry
+    
+            # Update dataset dynamically
+            self.dataset = dataset
+    
+            # Compute metrics
+            metrics = self.get_metrics_results(model=model, batch_size=batch_size, num_works=num_workers)
+    
+            results.append({
+                "Configuration": config_name,
+                "Accuracy": metrics["accuracy"] * 100,
+                "Precision": metrics["precision"] * 100,
+                "Recall": metrics["recall"] * 100,
+                "F1": metrics["f1"] * 100
+            })
+    
+        # --- Create LaTeX table ---
+        header = "\\begin{table}[H]\n\\centering\n"
+        header += "\\begin{tabular}{lcccc}\n"
+        header += "\\hline\n"
+        header += "Configuration & Accuracy (\\%) & Precision (\\%) & Recall (\\%) & F1 (\\%) \\\\\n"
+        header += "\\hline\n"
+    
+        body = ""
+        for res in results:
+            body += f"{res['Configuration']} & {res['Accuracy']:.2f} & {res['Precision']:.2f} & {res['Recall']:.2f} & {res['F1']:.2f} \\\\\n"
+    
+        footer = "\\hline\n\\end{tabular}\n"
+        if caption:
+            footer += f"\\caption{{{caption}}}\n"
+        if label:
+            footer += f"\\label{{{label}}}\n"
+        footer += "\\end{table}\n"
+    
+        latex_table = header + body + footer
+    
+        # Optionally save to .tex file
+        if save_path:
+            with open(save_path, "w") as f:
+                f.write(latex_table)
+            print(f"LaTeX table saved to: {save_path}")
+    
+        # Print in console for reference
+        print("\nGenerated LaTeX Table:\n")
+        print(latex_table)
+    
+        return latex_table
