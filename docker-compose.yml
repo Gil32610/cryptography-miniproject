@@ -8,8 +8,10 @@ services:
     working_dir: /app
     volumes:
       - ./:/app
+    # These two lines enable interactive use (e.g., a shell session or a Jupyter notebook)
     tty: true        
     stdin_open: true
+    # This deploys the container with access to all available GPUs
     deploy:
       resources:
         reservations:
