@@ -2,11 +2,11 @@ numpy
 pandas
 matplotlib
 scipy
-
-
 Pillow
 scikit-image
-
-
+scikit-learn
 tqdm
 tensorboard
+pyyaml
+python-dotenv
+opencv-python

@@ -1,0 +1,26 @@
+{
+    "name": "StegoCNN-Dev-Environment",
+    "dockerComposeFile": [
+        "../docker-compose.yml"
+    ],
+    "service": "stegocnn",
+    "workspaceFolder": "/app",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-toolsai.jupyter",
+                "ms-python.vscode-pylint",
+                "redhat.vscode-yaml",
+                "irongeek.vscode-env"
+            ],
+            "settings": {
+                "python.defaultInterpreterPath": "/opt/conda/bin/python",
+                "python.analysis.extraPaths": ["/app/stegocnn"]
+            }
+        }
+    },
+    "initializeCommand": "sh -c 'if [ ! -f .env ]; then cp .env.example .env; fi'",
+    
+    "remoteUser": "root"
+}

@@ -2,16 +2,18 @@ version: "3.8"
 
 services:
   stegocnn:
-    build: .
-    container_name: stegocnn_container
-    image: stego-project
-    working_dir: /app
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: stegocnn_dev
+    env_file: .env
     volumes:
-      - ./:/app
-    # These two lines enable interactive use (e.g., a shell session or a Jupyter notebook)
-    tty: true        
+      - .:/app
+      - ${DATASETS_PATH}:/app/data/datasets:ro
+      - ${EXPERIMENT_OUTPUT_PATH}:/app/outputs
+    working_dir: /app
+    tty: true
     stdin_open: true
-    # This deploys the container with access to all available GPUs
     deploy:
       resources:
         reservations:
