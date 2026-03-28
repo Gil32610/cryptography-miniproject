@@ -1,3 +1,4 @@
+import contextlib
 import numpy as np
 from sklearn.base import BaseEstimator, MetaEstimatorMixin, clone
 from sklearn.model_selection import ParameterGrid
@@ -120,15 +121,13 @@ class DISWOTNAS(BaseEstimator, MetaEstimatorMixin):
             estimator.set_params(**params)
             
             # Convert sklearn estimator to PyTorch model if needed
-            # This assumes your estimator can be converted to a PyTorch model
-            # You might need to adapt this based on your actual estimator
             student_model = self._estimator_to_model(estimator)
             student_model = student_model.to(self.device)
             
             # Compute similarity score
             score = self._compute_similarity_score(student_model, dataloader)
             
-            # Store results
+            # Store results — always as plain Python float
             self.cv_results_['params'].append(params)
             self.cv_results_['mean_test_score'].append(score)
             
@@ -141,8 +140,8 @@ class DISWOTNAS(BaseEstimator, MetaEstimatorMixin):
                 best_params = params
                 best_estimator = estimator
         
-        # Store best results
-        self.best_score_ = best_score
+        # Store best results as plain Python float
+        self.best_score_ = float(best_score)
         self.best_params_ = best_params
         self.best_estimator_ = best_estimator
         
@@ -155,7 +154,7 @@ class DISWOTNAS(BaseEstimator, MetaEstimatorMixin):
         self.best_estimator_.fit(X, y, **fit_params)
         
         # Add ranking
-        scores = np.array(self.cv_results_['mean_test_score'])
+        scores = np.array(self.cv_results_['mean_test_score'], dtype=float)
         self.cv_results_['rank_test_score'] = np.argsort(np.argsort(-scores)) + 1
         
         return self
@@ -211,85 +210,88 @@ class DISWOTNAS(BaseEstimator, MetaEstimatorMixin):
     def _estimator_to_model(self, estimator):
         """
         Convert sklearn estimator to PyTorch model.
-        
-        This is a placeholder - you need to implement this based on your
-        actual model architecture. The estimator should have a method to
-        create the PyTorch model.
         """
-        # If estimator already has a to_pytorch_model method
         if hasattr(estimator, 'to_pytorch_model'):
             return estimator.to_pytorch_model()
-        
-        # Otherwise, assume estimator is a PyTorch model
         return estimator
     
     def _compute_similarity_score(self, student_model, dataloader):
-        """Compute similarity score between teacher and student."""
-        student_model.eval()
-        
+        """Compute similarity score between teacher and student.
+
+        FIX: The semantic metric calls .backward() and therefore requires an
+        active autograd graph.  We use torch.no_grad() only for the relation
+        metric, and contextlib.nullcontext() for semantic so that gradients
+        are tracked correctly.
+        """
+        # semantic metric needs the autograd graph for .backward()
+        # relation metric is pure forward-pass and benefits from no_grad
+        ctx = (torch.no_grad() if self.metric == 'relation'
+               else contextlib.nullcontext())
+
+        # For semantic metric the models must be in train() mode so that
+        # parameter gradients are computed; relation metric uses eval().
+        if self.metric == 'semantic':
+            self.teacher_model.train()
+            student_model.train()
+        else:
+            student_model.eval()
+
         total_similarity = 0.0
         n_batches = 0
-        
-        with torch.no_grad():
+
+        with ctx:
             for batch_data in dataloader:
-                # Handle different data formats
                 if isinstance(batch_data, (list, tuple)):
-                    if len(batch_data) == 2:
-                        images, labels = batch_data
-                    else:
-                        images = batch_data[0]
-                        labels = batch_data[1] if len(batch_data) > 1 else None
+                    images = batch_data[0]
+                    labels = batch_data[1] if len(batch_data) > 1 else None
                 else:
                     images = batch_data
                     labels = None
                 
-                # Move to device
                 images = images.to(self.device)
                 if labels is not None:
                     labels = labels.to(self.device)
                 
-                # Compute similarity based on chosen metric
                 if self.metric == 'relation':
                     similarity = relation_similarity_metric(
-                        self.teacher_model, 
-                        student_model, 
-                        (images, labels)
+                        self.teacher_model, student_model, (images, labels)
                     )
                 elif self.metric == 'semantic':
                     similarity = semantic_similarity_metric(
-                        self.teacher_model, 
-                        student_model, 
-                        (images, labels)
+                        self.teacher_model, student_model, (images, labels)
                     )
                 else:
                     raise ValueError(f"Unknown metric: {self.metric}")
                 
-                total_similarity += similarity
+                # FIX: always accumulate as plain Python float to avoid
+                # keeping the entire computation graph alive across batches
+                total_similarity += float(similarity)
                 n_batches += 1
         
+        # FIX: return plain Python float so best_score_ and cv_results_ are
+        # always float, not torch.Tensor
         return total_similarity / n_batches
 
 
-# Wrapper functions for DISWOT metrics (adapted from your code)
+# ---------------------------------------------------------------------------
+# Metric functions
+# ---------------------------------------------------------------------------
+
 def relation_similarity_metric(teacher, student, batch_data):
     """Compute relation similarity between teacher and student."""
     image, label = batch_data
     
-    # Forward pass
     if hasattr(teacher, 'forward_features'):
         t_feats = teacher.forward_features(image)
         s_feats = student.forward_features(image)
     else:
-        # Fallback to simple forward
         t_out = teacher(image)
         s_out = student(image)
         return -1 * torch.nn.functional.mse_loss(t_out, s_out)
     
-    # Get activation before average pooling (adjust indices as needed)
     t_feat = t_feats[-2] if isinstance(t_feats, (list, tuple)) else t_feats
     s_feat = s_feats[-2] if isinstance(s_feats, (list, tuple)) else s_feats
     
-    # Compute batch similarity
     return -1 * batch_similarity(t_feat, s_feat)
 
 
@@ -297,46 +299,45 @@ def batch_similarity(f_t, f_s):
     """Compute batch-wise similarity matrix distance."""
     bsz = f_t.shape[0]
     
-    # Reshape
     f_s = f_s.view(f_s.shape[0], -1)
     f_t = f_t.view(f_t.shape[0], -1)
     
-    # Get batch-wise similarity matrix
     G_s = torch.mm(f_s, torch.t(f_s))
     G_s = F.normalize(G_s, dim=1)
     G_t = torch.mm(f_t, torch.t(f_t))
     G_t = F.normalize(G_t, dim=1)
     
-    # Produce L_2 distance
     G_diff = G_t - G_s
     return (G_diff * G_diff).view(-1, 1).sum() / (bsz * bsz)
 
 
 def semantic_similarity_metric(teacher, student, batch_data):
-    """Compute semantic similarity using Grad-CAM."""
+    """Compute semantic similarity using Grad-CAM.
+
+    NOTE: must NOT be called inside torch.no_grad() — it uses .backward().
+    Both models must be in train() mode so parameter grads are computed.
+    """
     criterion = nn.CrossEntropyLoss()
     image, label = batch_data
     
-    # Enable gradients for Grad-CAM
-    # Make sure requires_grad is True for parameters
     for param in teacher.parameters():
         param.requires_grad = True
     for param in student.parameters():
         param.requires_grad = True
     
-    # Forward pass
+    # Zero out stale gradients from previous batches
+    teacher.zero_grad()
+    student.zero_grad()
+
     t_logits = teacher(image)
     s_logits = student(image)
     
-    # Compute gradients
     criterion(t_logits, label).backward(retain_graph=True)
     criterion(s_logits, label).backward()
     
-    # Get gradients of final layer (adjust attribute names as needed)
     t_grad_cam = None
     s_grad_cam = None
     
-    # Try common attribute names for final layer
     for attr in ['fc', 'classifier', 'head', 'linear']:
         if hasattr(teacher, attr) and hasattr(getattr(teacher, attr), 'weight'):
             if t_grad_cam is None:
@@ -346,10 +347,8 @@ def semantic_similarity_metric(teacher, student, batch_data):
                 s_grad_cam = getattr(student, attr).weight.grad
     
     if t_grad_cam is None or s_grad_cam is None:
-        # Fallback to feature similarity if grad-cam not available
         return relation_similarity_metric(teacher, student, batch_data)
     
-    # Compute channel-wise similarity
     return -1 * channel_similarity(t_grad_cam, s_grad_cam)
 
 
@@ -357,28 +356,27 @@ def channel_similarity(f_t, f_s):
     """Compute channel-wise similarity matrix distance."""
     bsz, ch = f_s.shape[0], f_s.shape[1]
     
-    # Reshape
     f_s = f_s.view(bsz, ch, -1)
     f_t = f_t.view(bsz, ch, -1)
     
-    # Get channel-wise similarity matrix
     emd_s = torch.bmm(f_s, f_s.permute(0, 2, 1))
     emd_s = F.normalize(emd_s, dim=2)
     emd_t = torch.bmm(f_t, f_t.permute(0, 2, 1))
     emd_t = F.normalize(emd_t, dim=2)
     
-    # Produce L_2 distance
     G_diff = emd_s - emd_t
     return (G_diff * G_diff).view(bsz, -1).sum() / (ch * bsz)
 
 
+# ---------------------------------------------------------------------------
 # Example usage
+# ---------------------------------------------------------------------------
+
 if __name__ == "__main__":
     from sklearn.svm import SVC
     from sklearn.datasets import make_classification
     from sklearn.model_selection import train_test_split
     
-    # Create dummy teacher model (in practice, use a pre-trained model)
     class DummyTeacher(nn.Module):
         def __init__(self):
             super().__init__()
@@ -388,24 +386,19 @@ if __name__ == "__main__":
             return self.fc(x)
         
         def forward_features(self, x):
-            # Simulate feature extraction
             return [x, self.fc(x)]
     
-    # Generate dummy data
     X, y = make_classification(n_samples=1000, n_features=20, n_classes=2, random_state=42)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     
-    # Create teacher model
     teacher = DummyTeacher()
     
-    # Define search space
     param_grid = {
         'C': [0.1, 1.0, 10.0],
         'kernel': ['rbf', 'linear'],
         'gamma': ['scale', 'auto']
     }
     
-    # Create NAS estimator
     nas = DISWOTNAS(
         estimator=SVC(),
         param_grid=param_grid,
@@ -416,15 +409,12 @@ if __name__ == "__main__":
         verbose=1
     )
     
-    # Fit to find best architecture
     nas.fit(X_train, y_train)
     
-    # Access results
     print(f"\nBest parameters: {nas.best_params_}")
     print(f"Best score: {nas.best_score_}")
     print(f"Test score: {nas.score(X_test, y_test)}")
     
-    # Access all results
     print("\nAll results:")
     for params, score, rank in zip(
         nas.cv_results_['params'],
