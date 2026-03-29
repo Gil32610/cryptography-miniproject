@@ -10,3 +10,4 @@ tensorboard
 pyyaml
 python-dotenv
 opencv-python
+pytest
