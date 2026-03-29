@@ -10,4 +10,5 @@ tensorboard
 pyyaml
 python-dotenv
 opencv-python
+skorch
 pytest
