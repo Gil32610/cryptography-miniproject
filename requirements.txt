@@ -2,11 +2,22 @@ numpy
 pandas
 matplotlib
 scipy
+<<<<<<< Updated upstream
+=======
+torch==2.11.0
+pytest==9.0.2
+scikit-learn==1.8.0
+numpy==2.4.3
+
+>>>>>>> Stashed changes
 Pillow
 scikit-image
 scikit-learn
 tqdm
 tensorboard
+<<<<<<< Updated upstream
 pyyaml
 python-dotenv
 opencv-python
+=======
+>>>>>>> Stashed changes
