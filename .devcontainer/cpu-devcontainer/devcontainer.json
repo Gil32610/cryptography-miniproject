@@ -1,7 +1,7 @@
 {
-    "name": "StegoCNN-Dev-Environment",
+    "name": "StegoCNN (CPU)",
     "dockerComposeFile": [
-        "../docker-compose.yml"
+        "../../docker-compose.yml"
     ],
     "service": "stegocnn",
     "workspaceFolder": "/app",
@@ -21,6 +21,5 @@
         }
     },
     "initializeCommand": "sh -c 'if [ ! -f .env ]; then cp .env.example .env; fi'",
-    
     "remoteUser": "root"
 }

@@ -4,7 +4,7 @@ services:
   stegocnn:
     build: 
       context: .
-      dockerfile: Dockerfile
+      dockerfile: .devcontainer/Dockerfile
     container_name: stegocnn_dev
     env_file: .env
     volumes:
@@ -14,10 +14,3 @@ services:
     working_dir: /app
     tty: true
     stdin_open: true
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
