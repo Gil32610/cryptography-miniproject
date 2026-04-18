@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from activation import TanH3
 from utils import WeightExtractor
+from dropout.dropout_strategies import NoDropout, SpatialDropout, Dropblock
 
 class PreProcessing(nn.Module):
     def __init__(self,
@@ -180,6 +181,8 @@ class DimensionalityReductionConv(nn.Module):
                  avg_stride,
                  conv_kernel_size,
                  conv_stride,
+                 drop_prob=0,
+                 drop_block_size=0,
                  out_channels=60,
                  ):
         super().__init__()
@@ -188,6 +191,13 @@ class DimensionalityReductionConv(nn.Module):
             stride=avg_stride
             )
         
+        if drop_prob == 0:
+            self.dropout = NoDropout()
+        elif drop_block_size != 0:
+            self.dropout = Dropblock(prob=drop_prob, block_size=drop_block_size)
+        else:
+            self.dropout = SpatialDropout(prob=drop_prob)
+
         if isinstance(conv_kernel_size, int):
             padding_val = conv_kernel_size // 2
         else:
@@ -221,6 +231,7 @@ class DimensionalityReductionConv(nn.Module):
     
     def forward(self, x):
         x = self.average_pooling(x)
+        x = self.dropout(x)
         x = self.conv(x)
         x = self.activation(x)
         x = self.batch_norm(x)
@@ -303,7 +314,7 @@ class GBRASNET(nn.Module):
         self.simple_conv2 = SimpleConv(in_channels=30, out_channels=30, kernel_size=(3,3), padding='same')
 
         # Dimensionality Reduction Stage 1
-        self.dim_reduc_1 = DimensionalityReductionConv(in_channels=30,out_channels=60, avg_kernel_size=(2,2), avg_stride=(2,2), conv_kernel_size=(3,3), conv_stride=(1,1))
+        self.dim_reduc_1 = DimensionalityReductionConv(in_channels=30,out_channels=60, avg_kernel_size=(2,2), avg_stride=(2,2), conv_kernel_size=(3,3), conv_stride=(1,1)) # drop_prob = ..., drop_block_size = ...
 
         # Feature Extracture Stage 2
         self.feature_extract2 = FeatureExtractionConv(in_channels=60, out_channels=60, depth_conv_kernel_size=(1,1), separable_conv_kernel_size=(3,3))
@@ -312,7 +323,7 @@ class GBRASNET(nn.Module):
         self.simple_conv3 = SimpleConv(in_channels=60, out_channels=60, kernel_size=(3,3), padding='same')
 
         # Dimensionality Reduction Stage 2
-        self.dim_reduc_2 = DimensionalityReductionConv(in_channels=60, out_channels=60, avg_kernel_size=(2,2), avg_stride=(2,2), conv_kernel_size=(3,3), conv_stride=(1,1))
+        self.dim_reduc_2 = DimensionalityReductionConv(in_channels=60, out_channels=60, avg_kernel_size=(2,2), avg_stride=(2,2), conv_kernel_size=(3,3), conv_stride=(1,1)) # drop_prob = ..., drop_block_size = ...
 
         # Dimensionality Reduction Stage 3
         self.dim_reduc_3 = DimensionalityReductionConv(in_channels=60,out_channels=60, avg_kernel_size=(2,2), avg_stride=(2,2), conv_kernel_size=(3,3), conv_stride=(1,1))
